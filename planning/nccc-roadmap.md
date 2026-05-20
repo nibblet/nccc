@@ -3,10 +3,29 @@
 A living catalog of ideas inspired by other apps, translated into NCCC's voice, then sequenced for build. Phase 0 of `nccc-implementation-plan.md` remains the active work; everything here is post-Phase-0 candidate scope.
 
 **Translation rules** (from `CLAUDE.md` + `design-system.md`):
-- No 1–100 scores, star ratings, or user-facing sliders.
+- No 1–100 scores, star ratings, or user-facing sliders on the **face**.
 - The flavor wheel is **silent infrastructure** — surface as aggregate tag clouds, never as input sliders.
 - The Bartender is the system voice. Brass is the single primary action. Ember = lit recommend. Moss = club-validated pairing.
 - Private to 12 members. No public feeds, no follower counts.
+
+---
+
+## Guiding design principle — "Clean face, layered depth"
+
+Decided together (Paul + the roadmap conversation). This principle resolves the tension between NCCC's stated minimalism and the desire for cigar-nerd / bourbon-collector depth.
+
+**Three layers per product:**
+
+1. **Editorial layer** — curated reference data per product: construction (wrapper / binder / filler for cigars; mashbill / proof / age / distillery for bourbons), baseline tasting profile, canonical flavor descriptors. We author or source this. Seeded lazily on first recognition or eagerly for a starter set.
+2. **Member layer** — each member's individual annotations on top of the editorial baseline: adjusted strength, adjusted flavor descriptors, free-text Session notes per phase. A member's adjustments are attributable to them and visible to the club.
+3. **Club aggregate** — derived signal from the member layer: chip frequencies, consensus shape, "what the club tastes." This is what the Bartender narrates on the face.
+
+**What lives where:**
+
+- **The face** (home, Lounge feed, capture flow, feed cards): club aggregate only, Bartender-voiced, chip-based. No scores, no sliders, no charts.
+- **The depth** (tap into a stored or recognized product): editorial baseline + every member's adjustments overlaid + your own row for editing. Radar charts and per-field adjustments live here. Still no aggregated 0–100 score — adjustments are per-field, never collapsed into a single number that ranks products.
+
+**Open seed question:** lazy vs. eager editorial seeding. Recommend **lazy with a curated starter set** — the 50 most likely cigars + 50 most likely bourbons get hand-curated reference data; everything else is generated on first recognition (gpt-5-mini vision + reference-data prompt) and human-reviewable later.
 
 ---
 
@@ -32,9 +51,14 @@ Reviewed: product detail page, tasting profile screen, smoke session flow.
 
 **Why it appeals:** Glanceable visual signature of a cigar.
 
-**NCCC translation:** *Conditional.* A radar chart can work if and only if it is computed from aggregated club tag data (i.e. the silent wheel surfacing as a shape), never from user-facing sliders. The axes would be derived from the flavor wheel taxonomy, not invented separately. Labeled with the Bartender's voice ("THE CLUB TASTES…") rather than numeric axes.
+**NCCC translation (decided):** Lives in the **depth view** of a product page, never on the face. Three visual layers on the same chart:
+- Editorial baseline shape (curated source-of-truth).
+- Each member's adjustments as outlined overlay dots, attributable.
+- Club consensus shape as a soft moss fill (the aggregate of member adjustments).
 
-**Status:** Needs design exploration. Decision: do we want this at all, or is the chip cloud already enough?
+Axes derived from the flavor-wheel taxonomy (Strength, Body, Sweetness, Spice, Finish, Earthiness, Creaminess, Complexity for cigars; equivalents for bourbon). Numeric axis labels stay (0–10) because this IS the depth — the place where precision is welcome. The face still sees only chip clouds.
+
+**Status:** In. Goes into the depth-view phase.
 
 ---
 
@@ -56,20 +80,23 @@ Reviewed: product detail page, tasting profile screen, smoke session flow.
 
 ---
 
-#### Idea 1.4 — Detailed power-user scoring
+#### Idea 1.4 — Detailed adjustments (reframed from "power-user scoring")
 **What Capa does:** Personal 0–100 slider, separate from community average, separate from critic score.
 
-**Why it appeals:** Power users (cigar nerds, bourbon collectors) want to keep precise records.
+**Why it appeals reframed:** Power users want **precision**, not a number. Capa expresses that as a score; NCCC expresses it as **per-field adjustments to editorial data**.
 
-**NCCC translation — open question:** This directly contradicts the current spec ("avoid: star ratings, 1–100 scores, or sliders"). Three ways to reconcile:
+**NCCC translation (decided per "Clean face, layered depth"):**
+- No aggregated 0–100 score. No single number that ranks products.
+- Inside the depth view of a product, each member can adjust individual editorial fields:
+  - Strength axis (drag a dot on the editorial 0–10 baseline)
+  - Each tasting-profile axis (body, sweetness, spice, finish, etc.)
+  - Add/remove flavor descriptors from the editorial chip set
+  - Free-text Session notes per phase (first/second/final third for cigars; nose/palate/finish for bourbons)
+- Each member's adjustments are attributable: "Paul C tastes more coffee, less cocoa."
+- The club aggregate shape (moss-filled) is derived from all members' adjustments combined.
+- None of this surfaces on the face — only when you tap into a product.
 
-1. **Hold the line.** NCCC has no scores, period. Power users keep notes in free text. The whole product's differentiation is "no scores."
-2. **Private power-user mode.** A per-user toggle in settings adds a hidden personal scoring field, visible only to that member, never aggregated, never shown to the club. Doesn't change the social surface.
-3. **Embrace it.** Add scoring to the core product. (Breaks the current design philosophy.)
-
-**Recommendation:** Option 2 is the only one that preserves the club voice while serving power users. Worth a separate spec conversation before adoption.
-
-**Status:** Decision needed from Paul before this enters the sequenced roadmap.
+**Status:** In. The depth-view product page is the home for all of this.
 
 ---
 
