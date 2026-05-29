@@ -1,3 +1,4 @@
+export { CatalogLoadMore, CATALOG_PAGE_SIZE } from "./catalog-load-more";
 export { CatalogCard } from "./catalog-card";
 export { CatalogFilterControls } from "./catalog-filter-controls";
 export { DailyPourCard } from "./daily-pour-card";

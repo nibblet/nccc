@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 export type FeedTab = "for-you" | "cigars" | "bourbons";
 
 export const FEED_TABS: { value: FeedTab; label: string }[] = [
-  { value: "for-you", label: "For You" },
+  { value: "for-you", label: "Lounge" },
   { value: "cigars", label: "Cigars" },
   { value: "bourbons", label: "Bourbons" },
 ];

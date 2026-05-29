@@ -46,6 +46,16 @@ export function computeHaveHash(productIds: string[]): string {
   return createHash("sha256").update(sorted.join(",")).digest("hex").slice(0, 16);
 }
 
+/** Hash of visible Have shelf ids — for cache staleness without OpenAI. */
+export async function loadCurrentHaveHash(
+  supabase: SupabaseClient,
+  memberId: string,
+): Promise<string | null> {
+  const products = await loadShelfProducts(supabase, memberId);
+  if (products.length === 0) return null;
+  return computeHaveHash(products.map((p) => p.product_id));
+}
+
 export async function loadCachedInsight(
   supabase: SupabaseClient,
   memberId: string,

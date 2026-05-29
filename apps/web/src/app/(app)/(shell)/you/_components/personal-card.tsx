@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { interactiveCardClassName, Voice } from "@/components/primitives";
 import { cn } from "@/lib/utils";
@@ -20,7 +21,7 @@ export function PersonalCard({
   counts: string | null;
   thumbs: PersonalCardThumb[];
   href: string;
-  emptyVoice: string;
+  emptyVoice: ReactNode;
   insightTeaser?: string | null;
 }) {
   return (

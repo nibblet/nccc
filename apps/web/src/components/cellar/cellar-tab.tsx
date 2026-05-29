@@ -1,7 +1,9 @@
 "use client";
 
-import { startTransition, useOptimistic, useState } from "react";
+import { startTransition, useCallback, useEffect, useOptimistic, useState } from "react";
 import { setCellarState } from "@/lib/cellar/actions";
+import type { CellarFilterCounts } from "@/lib/cellar/load";
+import { loadCellarTabProductsAction } from "@/lib/cellar/refresh-actions";
 import { PickPourButton } from "@/components/feed";
 import { Voice } from "@/components/primitives";
 import { cn } from "@/lib/utils";
@@ -19,26 +21,53 @@ type CellarProduct = {
 
 type CellarTabProps = {
   have: CellarProduct[];
-  want: CellarProduct[];
-  tried: CellarProduct[];
+  counts: CellarFilterCounts;
   isOwnProfile: boolean;
   memberFirstName: string;
 };
 
-export function CellarTab({ have, want, tried, isOwnProfile, memberFirstName }: CellarTabProps) {
+function defaultTypeFilter(products: CellarProduct[]): TypeFilter {
+  const cigarCount = products.filter((p) => p.type === "cigar").length;
+  const bourbonCount = products.filter((p) => p.type === "bourbon").length;
+  if (cigarCount > 0 && bourbonCount > 0 && cigarCount < bourbonCount) return "cigar";
+  return "all";
+}
+
+export function CellarTab({ have, counts, isOwnProfile, memberFirstName }: CellarTabProps) {
   const [filter, setFilter] = useState<CellarFilter>("have");
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>(() => defaultTypeFilter(have));
+  const [lists, setLists] = useState<Record<CellarFilter, CellarProduct[]>>({
+    have,
+    want: [],
+    tried: [],
+  });
+  const [loadedTabs, setLoadedTabs] = useState<Set<CellarFilter>>(() => new Set(["have"]));
+  const [loadingTab, setLoadingTab] = useState<CellarFilter | null>(null);
+
   const [removedIds, setRemovedIds] = useOptimistic<
     Record<string, Set<string>>,
     { filter: CellarFilter; productId: string }
   >({} as Record<string, Set<string>>, (prev, { filter: f, productId }) => {
-    const key = f;
-    const next = new Set(prev[key]);
+    const next = new Set(prev[f]);
     next.add(productId);
-    return { ...prev, [key]: next };
+    return { ...prev, [f]: next };
   });
 
-  const lists: Record<CellarFilter, CellarProduct[]> = { have, want, tried };
+  const loadTab = useCallback(async (tab: CellarFilter) => {
+    if (tab === "have" || loadedTabs.has(tab)) return;
+    setLoadingTab(tab);
+    try {
+      const products = await loadCellarTabProductsAction(tab);
+      setLists((prev) => ({ ...prev, [tab]: products }));
+      setLoadedTabs((prev) => new Set(prev).add(tab));
+    } finally {
+      setLoadingTab(null);
+    }
+  }, [loadedTabs]);
+
+  useEffect(() => {
+    if (filter !== "have") void loadTab(filter);
+  }, [filter, loadTab]);
 
   const visibleList = lists[filter]
     .filter((p) => !removedIds[filter]?.has(p.product_id))
@@ -63,7 +92,7 @@ export function CellarTab({ have, want, tried, isOwnProfile, memberFirstName }: 
       : `"${memberFirstName} hasn't marked anything as tried yet."`,
   };
 
-  const hasHaveItems = have.length >= 1;
+  const hasHaveItems = counts.have >= 1;
 
   function handleRemove(productId: string) {
     startTransition(() => {
@@ -71,6 +100,12 @@ export function CellarTab({ have, want, tried, isOwnProfile, memberFirstName }: 
       setCellarState(productId, { [filter]: false });
     });
   }
+
+  const tabCounts: Record<CellarFilter, number> = {
+    have: counts.have,
+    want: counts.want,
+    tried: counts.tried,
+  };
 
   return (
     <div>
@@ -86,7 +121,6 @@ export function CellarTab({ have, want, tried, isOwnProfile, memberFirstName }: 
         </Voice>
       ) : null}
 
-      {/* State filter chips: Have / Want / Tried */}
       <div className="flex items-center gap-2 mb-3">
         {(["have", "want", "tried"] as CellarFilter[]).map((f) => (
           <button
@@ -102,14 +136,13 @@ export function CellarTab({ have, want, tried, isOwnProfile, memberFirstName }: 
             )}
           >
             {f}{" "}
-            {lists[f].length > 0 ? (
-              <span className="ml-1 text-foreground-subtle">{lists[f].length}</span>
+            {tabCounts[f] > 0 ? (
+              <span className="ml-1 text-foreground-subtle">{tabCounts[f]}</span>
             ) : null}
           </button>
         ))}
       </div>
 
-      {/* Type filter: All / Cigars / Bourbons — only shown when both types exist */}
       {hasBothTypes ? (
         <div className="flex items-center gap-1.5 mb-4">
           {([
@@ -135,7 +168,9 @@ export function CellarTab({ have, want, tried, isOwnProfile, memberFirstName }: 
         </div>
       ) : null}
 
-      {visibleList.length === 0 ? (
+      {loadingTab === filter ? (
+        <p className="text-sm text-foreground-subtle italic text-center py-4">Loading…</p>
+      ) : visibleList.length === 0 ? (
         <p className="text-sm text-foreground-subtle italic text-center py-4">
           {typeFilter !== "all"
             ? `No ${typeFilter === "cigar" ? "cigars" : "bourbons"} in this list.`
@@ -179,7 +214,7 @@ export function CellarTab({ have, want, tried, isOwnProfile, memberFirstName }: 
                 <button
                   type="button"
                   onClick={() => handleRemove(p.product_id)}
-                  className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-foreground-subtle hover:text-foreground hover:bg-surface-2 transition-colors"
+                  className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full text-foreground-subtle hover:text-foreground hover:bg-surface-2 transition-colors touch-manipulation"
                   aria-label={`Remove from ${filter}`}
                   title={`Remove from ${filter}`}
                 >

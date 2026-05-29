@@ -7,7 +7,7 @@ import type { BadgeComputeInput } from "@/lib/badges/compute";
 import { badgesForMember, loadMemberBadges } from "@/lib/badges/load";
 import { nextBadgeForMember } from "@/lib/badges/next";
 import { loadCachedInsight } from "@/lib/cellar/insight";
-import { loadCellarSnapshot } from "@/lib/cellar/load";
+import { loadCellarFilterCounts, loadVisibleHaveThumbIds } from "@/lib/cellar/load";
 import { formatMemberInitials, type MemberNameFields } from "@/lib/identity";
 import { countMemberPairingSessions, loadMemberPairingSessions } from "@/lib/pairing/sessions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -22,7 +22,7 @@ export default async function YouHubPage() {
   const [
     profileResult,
     badgeMap,
-    cellarSnapshot,
+    cellarCounts,
     recentTastingsResult,
     badgeInputs,
     tastingsCountResult,
@@ -36,7 +36,7 @@ export default async function YouHubPage() {
       .eq("id", me)
       .maybeSingle(),
     loadMemberBadges(supabase),
-    loadCellarSnapshot(supabase, me),
+    loadCellarFilterCounts(supabase, me),
     supabase
       .from("tastings")
       .select("id, product_id, product:products(id, name, image_url, type), created_at")
@@ -84,7 +84,7 @@ export default async function YouHubPage() {
       imageUrl: t.product.image_url,
     }));
 
-  const haveIds = Array.from(cellarSnapshot.have).slice(0, 3);
+  const haveIds = await loadVisibleHaveThumbIds(supabase, me);
   let cellarThumbs: PersonalCardThumb[] = [];
   if (haveIds.length > 0) {
     const { data: products } = await supabase
@@ -97,7 +97,7 @@ export default async function YouHubPage() {
   }
 
   const tastingsCount = tastingsCountResult.count ?? 0;
-  const cellarCounts = `${cellarSnapshot.have.size} have · ${cellarSnapshot.want.size} want · ${cellarSnapshot.tried.size} tried`;
+  const cellarCountsStr = `${cellarCounts.have} have · ${cellarCounts.want} want · ${cellarCounts.tried} tried`;
   const tastingsCountStr = `${tastingsCount} logged`;
   const pairingsCountStr = `${pairingsCount} captured`;
   const pairingThumbs: PersonalCardThumb[] = recentPairings.map((p) => ({
@@ -162,7 +162,7 @@ export default async function YouHubPage() {
       <div className="flex flex-col gap-3">
         <PersonalCard
           title="Your cellar"
-          counts={cellarCounts}
+          counts={cellarCountsStr}
           thumbs={cellarThumbs}
           href="/you/cellar"
           emptyVoice='"The shelf is bare. Mark a few on hand."'
@@ -176,11 +176,17 @@ export default async function YouHubPage() {
           emptyVoice='"Nothing logged yet. Snap something next time you light up."'
         />
         <PersonalCard
-          title="Your pairings"
+          title="Captured pairings"
           counts={pairingsCountStr}
           thumbs={pairingThumbs}
           href="/you/pairings"
-          emptyVoice='"No pairings captured yet. Pick a cigar and a pour."'
+          emptyVoice={
+            <>
+              No pairings captured yet. Pick a cigar and a pour, or{" "}
+              <span className="text-accent underline">see Winston&apos;s matches</span> on the
+              Pairings tab.
+            </>
+          }
         />
       </div>
 

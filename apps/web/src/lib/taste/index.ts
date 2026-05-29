@@ -1,4 +1,4 @@
-export { ensureTasteRecommendations } from "./load";
+export { ensureTasteRecommendations, loadCachedTasteRecommendations, loadCurrentTasteSignalHash } from "./load";
 export {
   PREFERENCE_BOOST,
   RECOMMENDATIONS_PER_TYPE,

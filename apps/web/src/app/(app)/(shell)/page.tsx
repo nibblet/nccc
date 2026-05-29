@@ -4,6 +4,8 @@ import { NCCCLogo, Winston } from "@/components/brand";
 import {
   CatalogCard,
   CatalogFilterControls,
+  CatalogLoadMore,
+  CATALOG_PAGE_SIZE,
   DailyPourCard,
   DailyPourSkeleton,
   FeedBodySkeleton,
@@ -17,6 +19,7 @@ import {
 import { AppShell } from "@/components/layout/app-shell";
 import { Button, Card, Divider, Voice } from "@/components/primitives";
 import { loadCellarSnapshot } from "@/lib/cellar/load";
+import type { CellarSnapshot } from "@/lib/cellar/types";
 import { ZERO_ROW } from "@/lib/cellar/types";
 import { loadDailyPourCandidates } from "@/lib/daily-pour/load";
 import { selectDailyPour, todayKey } from "@/lib/daily-pour/select";
@@ -65,6 +68,7 @@ type SearchParams = Promise<{
   club?: string;
   enriched?: string;
   sort?: string;
+  offset?: string;
 }>;
 
 function parseTab(raw: string | undefined): FeedTab {
@@ -149,6 +153,11 @@ function parseFilters(sp: Awaited<SearchParams>): {
   };
 }
 
+function parseCatalogOffset(raw: string | undefined): number {
+  const n = Number.parseInt(raw ?? "0", 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 export default async function FeedPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
   const tab = parseTab(sp.tab);
@@ -163,7 +172,7 @@ export default async function FeedPage({ searchParams }: { searchParams: SearchP
       <FeedTabs active={tab} />
 
       <Suspense fallback={<FeedBodySkeleton />}>
-        <FeedBody tab={tab} filters={filters} sort={sort} />
+        <FeedBody tab={tab} filters={filters} sort={sort} catalogOffset={parseCatalogOffset(sp.offset)} />
       </Suspense>
     </AppShell>
   );
@@ -173,15 +182,20 @@ async function FeedBody({
   tab,
   filters,
   sort,
+  catalogOffset,
 }: {
   tab: FeedTab;
   filters: CatalogFilters;
   sort: CatalogSortKey;
+  catalogOffset: number;
 }) {
   const supabase = await createSupabaseServerClient();
   const { data: auth } = await supabase.auth.getUser();
   const viewerId = auth.user?.id ?? null;
-  const preferences = viewerId ? await loadMemberPreferences(supabase, viewerId) : null;
+  const [preferences, cellarSnapshot] = await Promise.all([
+    viewerId ? loadMemberPreferences(supabase, viewerId) : Promise.resolve(null),
+    viewerId ? loadCellarSnapshot(supabase, viewerId) : Promise.resolve(null),
+  ]);
 
   if (tab === "for-you") {
     return (
@@ -195,7 +209,12 @@ async function FeedBody({
               </>
             }
           >
-            <LoungeHeroSection supabase={supabase} viewerId={viewerId} preferences={preferences} />
+            <LoungeHeroSection
+              supabase={supabase}
+              viewerId={viewerId}
+              preferences={preferences}
+              cellarSnapshot={cellarSnapshot}
+            />
           </Suspense>
         ) : null}
         <Suspense fallback={<FeedBodySkeleton />}>
@@ -213,6 +232,8 @@ async function FeedBody({
       preferences={preferences}
       filters={filters}
       sort={sort}
+      cellarSnapshot={cellarSnapshot}
+      catalogOffset={catalogOffset}
     />
   );
 }
@@ -221,12 +242,19 @@ async function LoungeHeroSection({
   supabase,
   viewerId,
   preferences,
+  cellarSnapshot,
 }: {
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
   viewerId: string;
   preferences: Awaited<ReturnType<typeof loadMemberPreferences>> | null;
+  cellarSnapshot: CellarSnapshot | null;
 }) {
-  const candidates = await loadDailyPourCandidates(supabase, preferences, viewerId);
+  const candidates = await loadDailyPourCandidates(
+    supabase,
+    preferences,
+    viewerId,
+    cellarSnapshot ?? undefined,
+  );
   const pour = selectDailyPour({ memberId: viewerId, date: todayKey() }, candidates);
 
   if (pour) {
@@ -240,7 +268,12 @@ async function LoungeHeroSection({
     <div className="mb-4">
       {pour ? <DailyPourCard pour={pour} /> : null}
       <Suspense fallback={<FindYourNextSkeleton />}>
-        <FindYourNextSection supabase={supabase} viewerId={viewerId} preferences={preferences} />
+        <FindYourNextSection
+          supabase={supabase}
+          viewerId={viewerId}
+          preferences={preferences}
+          cellarSnapshot={cellarSnapshot}
+        />
       </Suspense>
     </div>
   );
@@ -250,12 +283,19 @@ async function FindYourNextSection({
   supabase,
   viewerId,
   preferences,
+  cellarSnapshot,
 }: {
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
   viewerId: string;
   preferences: Awaited<ReturnType<typeof loadMemberPreferences>> | null;
+  cellarSnapshot: CellarSnapshot | null;
 }) {
-  const suggestions = await loadFindNextSuggestions(supabase, viewerId, preferences);
+  const suggestions = await loadFindNextSuggestions(
+    supabase,
+    viewerId,
+    preferences,
+    cellarSnapshot ?? undefined,
+  );
   return <FindYourNextHero suggestions={suggestions} />;
 }
 
@@ -377,6 +417,8 @@ async function CatalogBody({
   preferences,
   filters,
   sort,
+  cellarSnapshot,
+  catalogOffset,
 }: {
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
   viewerId: string | null;
@@ -384,11 +426,18 @@ async function CatalogBody({
   preferences: Awaited<ReturnType<typeof loadMemberPreferences>> | null;
   filters: CatalogFilters;
   sort: CatalogSortKey;
+  cellarSnapshot: CellarSnapshot | null;
+  catalogOffset: number;
 }) {
-  const [entries, cellarSnapshot] = await Promise.all([
-    loadCatalogBrowse(supabase, productType, preferences, 500, filters),
-    viewerId ? loadCellarSnapshot(supabase, viewerId) : null,
-  ]);
+  const showCount = catalogOffset + CATALOG_PAGE_SIZE;
+  const { entries, total } = await loadCatalogBrowse(
+    supabase,
+    productType,
+    preferences,
+    showCount,
+    filters,
+    0,
+  );
   const signed = await signImagePaths(
     supabase,
     entries.map((e) => e.hero_image_path),
@@ -396,7 +445,6 @@ async function CatalogBody({
 
   return (
     <>
-      {/* Filter + sort controls — client component, reads/writes URL params */}
       <CatalogFilterControls productType={productType} activeFilters={filters} activeSort={sort} />
 
       {entries.length === 0 ? (
@@ -408,13 +456,16 @@ async function CatalogBody({
           </Voice>
         </Card>
       ) : (
-        <CatalogList
-          entries={entries}
-          grouped={productType === "bourbon"}
-          signed={signed}
-          cellarSnapshot={cellarSnapshot}
-          showCellar={Boolean(viewerId)}
-        />
+        <>
+          <CatalogList
+            entries={entries}
+            grouped={productType === "bourbon"}
+            signed={signed}
+            cellarSnapshot={cellarSnapshot}
+            showCellar={Boolean(viewerId)}
+          />
+          <CatalogLoadMore total={total} shown={entries.length} />
+        </>
       )}
     </>
   );
@@ -427,7 +478,7 @@ function CatalogList({
   cellarSnapshot,
   showCellar,
 }: {
-  entries: Awaited<ReturnType<typeof loadCatalogBrowse>>;
+  entries: Awaited<ReturnType<typeof loadCatalogBrowse>>["entries"];
   grouped: boolean;
   signed: Map<string, string>;
   cellarSnapshot: Awaited<ReturnType<typeof loadCellarSnapshot>> | null;

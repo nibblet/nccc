@@ -100,28 +100,20 @@ function PairingHeroTile({
 
   return (
     <div className={cn(INTERACTIVE_TILE, "px-4 py-4")}>
-      <div className="flex items-baseline justify-between gap-3 mb-2">
-        <p className="text-[10px] uppercase tracking-widest text-foreground-subtle">{title}</p>
-        <button
-          type="button"
-          onClick={onOpenSheet}
-          className="text-[10px] uppercase tracking-widest text-foreground-subtle hover:text-foreground transition-colors shrink-0"
-        >
-          {count} picks →
-        </button>
-      </div>
-      <Link href={`/pairings/${topPair.cigar_id}/${topPair.bourbon_id}`} className="block group">
-        <p className="text-base text-foreground truncate group-hover:text-accent transition-colors">
-          {productHeadline(topPair.cigar_name, topPair.cigar_brand)}
-        </p>
+      <button type="button" onClick={onOpenSheet} className="w-full text-left">
+        <div className="flex items-baseline justify-between gap-3 mb-2">
+          <p className="text-[10px] uppercase tracking-widest text-foreground-subtle">{title}</p>
+          <span className="text-[10px] uppercase tracking-widest text-foreground-subtle shrink-0">
+            {count} picks →
+          </span>
+        </div>
+        <p className="text-base text-foreground truncate">{productHeadline(topPair.cigar_name, topPair.cigar_brand)}</p>
         <p className="text-[11px] tracking-widest uppercase text-foreground-subtle my-1">with</p>
-        <p className="text-base text-foreground truncate group-hover:text-accent transition-colors">
-          {productHeadline(topPair.bourbon_name, topPair.bourbon_brand)}
-        </p>
+        <p className="text-base text-foreground truncate">{productHeadline(topPair.bourbon_name, topPair.bourbon_brand)}</p>
         {topPair.club_validated ? (
           <p className="text-[10px] uppercase tracking-widest text-moss-600 mt-2">● club tried</p>
         ) : null}
-      </Link>
+      </button>
     </div>
   );
 }
@@ -163,7 +155,7 @@ function FindNextSheet({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex flex-col justify-end bg-ink-900/40"
+      className="fixed inset-0 z-20 flex flex-col justify-end bg-ink-900/40"
       role="dialog"
       aria-modal="true"
       aria-label={title}

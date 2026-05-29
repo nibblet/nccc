@@ -183,18 +183,75 @@ export async function loadOrComputeTopPairings(
   const limit = options.limit ?? 3;
   const minScore = options.minScore ?? 55;
 
-  const fresh = await suggestPairings(supabase, sourceProductId, { limit, minScore });
-
-  if (fresh.length === 0) return fresh;
-
-  // Persist for the dedicated pairing screen lookup.
   const { data: source } = await supabase
     .from("products")
     .select("type")
     .eq("id", sourceProductId)
     .maybeSingle();
 
-  if (source?.type === "cigar") {
+  if (!source?.type) return [];
+
+  const sourceType = source.type as ProductType;
+
+  if (sourceType === "cigar") {
+    const { data: cachedRaw } = await supabase
+      .from("pairings_cache")
+      .select("bourbon_id, score, bourbon:bourbon_id(name, brand, type)")
+      .eq("cigar_id", sourceProductId)
+      .gte("score", minScore)
+      .order("score", { ascending: false })
+      .limit(limit);
+
+    type Row = {
+      bourbon_id: string;
+      score: number;
+      bourbon: { name: string; brand: string | null; type: ProductType } | null;
+    };
+
+    const cached = ((cachedRaw as unknown as Row[] | null) ?? []).filter((r) => r.bourbon);
+    if (cached.length >= limit) {
+      return cached.map((r) => ({
+        product_id: r.bourbon_id,
+        name: r.bourbon?.name ?? "",
+        brand: r.bourbon?.brand ?? null,
+        type: "bourbon" as const,
+        score: r.score,
+        reasons: [],
+      }));
+    }
+  } else {
+    const { data: cachedRaw } = await supabase
+      .from("pairings_cache")
+      .select("cigar_id, score, cigar:cigar_id(name, brand, type)")
+      .eq("bourbon_id", sourceProductId)
+      .gte("score", minScore)
+      .order("score", { ascending: false })
+      .limit(limit);
+
+    type Row = {
+      cigar_id: string;
+      score: number;
+      cigar: { name: string; brand: string | null; type: ProductType } | null;
+    };
+
+    const cached = ((cachedRaw as unknown as Row[] | null) ?? []).filter((r) => r.cigar);
+    if (cached.length >= limit) {
+      return cached.map((r) => ({
+        product_id: r.cigar_id,
+        name: r.cigar?.name ?? "",
+        brand: r.cigar?.brand ?? null,
+        type: "cigar" as const,
+        score: r.score,
+        reasons: [],
+      }));
+    }
+  }
+
+  const fresh = await suggestPairings(supabase, sourceProductId, { limit, minScore });
+
+  if (fresh.length === 0) return fresh;
+
+  if (sourceType === "cigar") {
     await supabase.from("pairings_cache").upsert(
       fresh.map((c) => ({
         cigar_id: sourceProductId,
@@ -205,7 +262,7 @@ export async function loadOrComputeTopPairings(
       })),
       { onConflict: "cigar_id,bourbon_id" },
     );
-  } else if (source?.type === "bourbon") {
+  } else {
     await supabase.from("pairings_cache").upsert(
       fresh.map((c) => ({
         cigar_id: c.product_id,

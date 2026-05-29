@@ -49,7 +49,7 @@ function computeSignalHash(
     .slice(0, 16);
 }
 
-async function loadCachedRecommendations(
+export async function loadCachedTasteRecommendations(
   supabase: SupabaseClient,
   memberId: string,
 ): Promise<TasteRecommendations | null> {
@@ -102,6 +102,22 @@ const EMPTY_RECOMMENDATIONS = (signalHash: string): TasteRecommendations => ({
  * On generation failure we fall back to the stale cache rather than blanking
  * the section.
  */
+/** Current signal hash for cache staleness checks (no OpenAI). */
+export async function loadCurrentTasteSignalHash(
+  supabase: SupabaseClient,
+  memberId: string,
+): Promise<string> {
+  const [snapshot, preferences] = await Promise.all([
+    loadCellarSnapshot(supabase, memberId),
+    loadMemberPreferences(supabase, memberId),
+  ]);
+  const triedLovedIds = [...new Set([...snapshot.tried, ...snapshot.loved])];
+  return computeSignalHash(
+    triedLovedIds.map((id) => ({ id, loved: snapshot.loved.has(id) })),
+    preferences,
+  );
+}
+
 export async function ensureTasteRecommendations(
   supabase: SupabaseClient,
   memberId: string,
@@ -117,7 +133,7 @@ export async function ensureTasteRecommendations(
     preferences,
   );
 
-  const cached = await loadCachedRecommendations(supabase, memberId);
+  const cached = await loadCachedTasteRecommendations(supabase, memberId);
   if (cached && cached.signal_hash === signalHash) return cached;
 
   try {

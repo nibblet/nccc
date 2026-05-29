@@ -66,6 +66,40 @@ export async function loadCellarSnapshot(
   return snapshot;
 }
 
+export type CellarFilterCounts = {
+  have: number;
+  want: number;
+  tried: number;
+};
+
+async function countVisibleCellarFilter(
+  supabase: SupabaseClient,
+  memberId: string,
+  filter: "have" | "want" | "tried",
+): Promise<number> {
+  const { count } = await supabase
+    .from("member_saves")
+    .select("product_id, products!inner(catalog_included, status)", { count: "exact", head: true })
+    .eq("member_id", memberId)
+    .eq(filter, true)
+    .eq("products.catalog_included", true)
+    .eq("products.status", "confirmed");
+  return count ?? 0;
+}
+
+/** Visible shelf counts — matches loadCellarProducts filters (catalog_included + confirmed). */
+export async function loadCellarFilterCounts(
+  supabase: SupabaseClient,
+  memberId: string,
+): Promise<CellarFilterCounts> {
+  const [have, want, tried] = await Promise.all([
+    countVisibleCellarFilter(supabase, memberId, "have"),
+    countVisibleCellarFilter(supabase, memberId, "want"),
+    countVisibleCellarFilter(supabase, memberId, "tried"),
+  ]);
+  return { have, want, tried };
+}
+
 /**
  * Load all saves for a member filtered to a specific state column.
  * Returns the product_ids in the given state, plus the full row for display.
@@ -121,6 +155,26 @@ export async function loadCellarProducts(
       };
     })
     .filter((r) => r.name);
+}
+
+/** Recent visible Have product ids for hub thumbnails. */
+export async function loadVisibleHaveThumbIds(
+  supabase: SupabaseClient,
+  memberId: string,
+  limit = 3,
+): Promise<string[]> {
+  const { data } = await supabase
+    .from("member_saves")
+    .select("product_id, products!inner(catalog_included, status)")
+    .eq("member_id", memberId)
+    .eq("have", true)
+    .eq("products.catalog_included", true)
+    .eq("products.status", "confirmed")
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (!data) return [];
+  return (data as Array<{ product_id: string }>).map((r) => r.product_id);
 }
 
 export { EMPTY_SNAPSHOT };

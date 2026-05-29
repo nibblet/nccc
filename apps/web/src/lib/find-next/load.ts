@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadCellarSnapshot } from "@/lib/cellar/load";
+import type { CellarSnapshot } from "@/lib/cellar/types";
 import { loadDailyPourCandidates } from "@/lib/daily-pour/load";
 import { loadPickPourCandidates } from "@/lib/pick-pour/load";
 import { productMatchesPreferences } from "@/lib/preferences/match";
@@ -62,11 +63,15 @@ export async function loadFindNextSuggestions(
   supabase: SupabaseClient,
   memberId: string,
   preferences: MemberPreferences | null,
+  cellarSnapshot?: CellarSnapshot,
 ): Promise<FindNextSuggestions> {
+  const snapshot =
+    cellarSnapshot ?? (await loadCellarSnapshot(supabase, memberId));
+
   const [pairing, pour, smoke] = await Promise.all([
     loadPairingSuggestions(supabase, memberId, preferences),
-    loadProductSuggestions(supabase, memberId, preferences, "bourbon"),
-    loadProductSuggestions(supabase, memberId, preferences, "cigar"),
+    loadProductSuggestions(supabase, snapshot, preferences, "bourbon"),
+    loadProductSuggestions(supabase, snapshot, preferences, "cigar"),
   ]);
 
   return { pairing, pour, smoke };
@@ -117,12 +122,10 @@ async function loadPairingSuggestions(
 
 async function loadProductSuggestions(
   supabase: SupabaseClient,
-  memberId: string,
+  cellar: CellarSnapshot,
   preferences: MemberPreferences | null,
   productType: "cigar" | "bourbon",
 ): Promise<FindNextProductSuggestion[]> {
-  const cellar = await loadCellarSnapshot(supabase, memberId);
-
   const haveIds = [...cellar.have];
   let cellarProducts: FindNextProductSuggestion[] = [];
 

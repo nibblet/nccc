@@ -3,7 +3,7 @@ import { applyCellarBias } from "@/lib/cellar/bias";
 import { loadCellarSnapshot } from "@/lib/cellar/load";
 import type { CellarSnapshot } from "@/lib/cellar/types";
 import { EMPTY_SNAPSHOT } from "@/lib/cellar/types";
-import { loadOrComputeTopPairings, type PairingCandidate } from "@/lib/pairing/engine";
+import { loadTopPairingForCigar as loadCachedTopPairingForCigar } from "@/lib/pairing/cache-lookup";
 import { productMatchesPreferences } from "@/lib/preferences/match";
 import type { MemberPreferences } from "@/lib/preferences/types";
 import { hasAnyPreferences } from "@/lib/preferences/types";
@@ -39,8 +39,11 @@ export async function loadDailyPourCandidates(
   supabase: SupabaseClient,
   preferences: MemberPreferences | null,
   memberId?: string | null,
+  cellarSnapshot?: CellarSnapshot,
 ): Promise<DailyPourCandidate[]> {
-  const cellar = memberId ? await loadCellarSnapshot(supabase, memberId) : EMPTY_SNAPSHOT;
+  const cellar =
+    cellarSnapshot ??
+    (memberId ? await loadCellarSnapshot(supabase, memberId) : EMPTY_SNAPSHOT);
 
   let candidates: DailyPourCandidate[];
 
@@ -106,7 +109,7 @@ async function loadPreferenceCandidates(
   // Parallelize: each cache lookup (or one-time engine run on miss) is independent.
   const computed: (DailyPourCandidate | null)[] = await Promise.all(
     matches.map(async (c): Promise<DailyPourCandidate | null> => {
-      const top = await loadTopPairingForCigar(supabase, c.id);
+      const top = await loadCachedTopPairingForCigar(supabase, c.id);
       if (!top) return null;
       return {
         cigar_id: c.id,
@@ -123,43 +126,6 @@ async function loadPreferenceCandidates(
   );
 
   return computed.filter((c): c is DailyPourCandidate => c !== null);
-}
-
-/**
- * Read the top cached bourbon for a cigar; fall back to the engine only when
- * the cache is empty so the feed never re-scores the full catalog on every visit.
- */
-async function loadTopPairingForCigar(
-  supabase: SupabaseClient,
-  cigarId: string,
-): Promise<PairingCandidate | null> {
-  type CacheRow = {
-    bourbon_id: string;
-    score: number;
-    bourbon: { name: string; brand: string | null } | null;
-  };
-
-  const { data } = await supabase
-    .from("pairings_cache")
-    .select("bourbon_id, score, bourbon:bourbon_id(name, brand)")
-    .eq("cigar_id", cigarId)
-    .order("score", { ascending: false })
-    .limit(1);
-
-  const row = ((data as unknown as CacheRow[] | null) ?? [])[0];
-  if (row?.bourbon) {
-    return {
-      product_id: row.bourbon_id,
-      name: row.bourbon.name,
-      brand: row.bourbon.brand,
-      type: "bourbon",
-      score: row.score,
-      reasons: [],
-    };
-  }
-
-  const computed = await loadOrComputeTopPairings(supabase, cigarId, { limit: 1 });
-  return computed[0] ?? null;
 }
 
 async function loadClubValidatedCandidates(

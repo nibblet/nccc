@@ -1,13 +1,19 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { CellarInsightCard, TryNext } from "@/components/cellar";
+import { CellarInsightSectionClient } from "@/components/cellar/cellar-insight-section";
+import { CellarInsightSkeleton } from "@/components/cellar/cellar-insight-skeleton";
+import { TryNextSectionClient } from "@/components/cellar/try-next-section";
+import { TryNextSkeleton } from "@/components/cellar/try-next-skeleton";
 import { AppShell } from "@/components/layout/app-shell";
 import { CellarSection } from "@/components/members/sections";
 import { Divider } from "@/components/primitives";
-import { ensureCellarInsight } from "@/lib/cellar/insight";
+import { loadCachedInsight, loadCurrentHaveHash } from "@/lib/cellar/insight";
 import { formatMemberName, type MemberNameFields } from "@/lib/identity";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { ensureTasteRecommendations } from "@/lib/taste";
+import {
+  loadCachedTasteRecommendations,
+  loadCurrentTasteSignalHash,
+} from "@/lib/taste/load";
 
 export default async function YouCellarPage() {
   const supabase = await createSupabaseServerClient();
@@ -31,11 +37,11 @@ export default async function YouCellarPage() {
         <h1 className="text-3xl mt-1">Your cellar</h1>
       </header>
 
-      <Suspense fallback={null}>
+      <Suspense fallback={<CellarInsightSkeleton />}>
         <CellarInsightSection memberId={auth.user.id} />
       </Suspense>
 
-      <Suspense fallback={null}>
+      <Suspense fallback={<TryNextSkeleton />}>
         <TryNextSection memberId={auth.user.id} />
       </Suspense>
 
@@ -52,19 +58,27 @@ export default async function YouCellarPage() {
 
 async function CellarInsightSection({ memberId }: { memberId: string }) {
   const supabase = await createSupabaseServerClient();
-  const insight = await ensureCellarInsight(supabase, memberId);
-  if (!insight) return null;
-  return <CellarInsightCard insight={insight} />;
+  const [cached, currentHash] = await Promise.all([
+    loadCachedInsight(supabase, memberId),
+    loadCurrentHaveHash(supabase, memberId),
+  ]);
+  if (!currentHash) return null;
+  const stale = !cached || cached.have_hash !== currentHash;
+  return <CellarInsightSectionClient initialInsight={cached} stale={stale} />;
 }
 
 async function TryNextSection({ memberId }: { memberId: string }) {
   const supabase = await createSupabaseServerClient();
-  const recommendations = await ensureTasteRecommendations(supabase, memberId);
-  if (recommendations.cigars.length === 0 && recommendations.bourbons.length === 0) return null;
+  const [cached, currentHash] = await Promise.all([
+    loadCachedTasteRecommendations(supabase, memberId),
+    loadCurrentTasteSignalHash(supabase, memberId),
+  ]);
+  const stale = !cached || cached.signal_hash !== currentHash;
   return (
-    <>
-      <Divider label="Try next" />
-      <TryNext cigars={recommendations.cigars} bourbons={recommendations.bourbons} />
-    </>
+    <TryNextSectionClient
+      initialCigars={cached?.cigars ?? []}
+      initialBourbons={cached?.bourbons ?? []}
+      stale={stale}
+    />
   );
 }

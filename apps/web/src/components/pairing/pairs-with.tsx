@@ -31,8 +31,15 @@ export function PairsWith({ sourceType, sourceId, candidates, validatedPairs }: 
 
   return (
     <div className="flex flex-col gap-3">
-      {candidates.map((c) => {
+      {candidates.map((c, index) => {
         const isValidated = validatedPairs.has(c.product_id);
+        const reason = c.reasons[0]?.reason;
+        const priorReason = candidates
+          .slice(0, index)
+          .map((x) => x.reasons[0]?.reason)
+          .find((r) => r === reason);
+        const showReason = reason && reason !== priorReason;
+
         return (
           <Link key={c.product_id} href={pairingHref(sourceType, sourceId, c.product_id)}>
             <Card
@@ -65,8 +72,8 @@ export function PairsWith({ sourceType, sourceId, candidates, validatedPairs }: 
                   </span>
                 ) : null}
               </div>
-              {c.reasons[0] ? (
-                <p className="text-sm text-foreground-muted italic mt-2">"{c.reasons[0].reason}"</p>
+              {showReason ? (
+                <p className="text-sm text-foreground-muted italic mt-2">"{reason}"</p>
               ) : null}
             </Card>
           </Link>

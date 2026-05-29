@@ -1,8 +1,10 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import type { CellarInsight } from "@/lib/cellar/insight";
 import { Card, Voice } from "@/components/primitives";
+import { cn } from "@/lib/utils";
 
 type CellarInsightCardProps = {
   insight: CellarInsight;
@@ -57,8 +59,12 @@ export function CellarInsightCard({ insight }: CellarInsightCardProps) {
           </div>
         ) : null}
         {hasMore ? (
-          <p className="text-[11px] text-foreground-subtle mt-2">
-            {expanded ? "Show less" : "Read more"}
+          <p className="text-[11px] text-foreground-subtle mt-2 inline-flex items-center gap-1">
+            {expanded ? "Show less" : "Tap to read more"}
+            <ChevronDown
+              className={cn("w-3.5 h-3.5 transition-transform", expanded && "rotate-180")}
+              aria-hidden="true"
+            />
           </p>
         ) : null}
       </button>

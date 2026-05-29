@@ -1,5 +1,5 @@
 import { CellarTab } from "@/components/cellar";
-import { loadCellarProducts } from "@/lib/cellar/load";
+import { loadCellarFilterCounts, loadCellarProducts } from "@/lib/cellar/load";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function CellarSection({
@@ -12,17 +12,15 @@ export async function CellarSection({
   isOwnProfile: boolean;
 }) {
   const supabase = await createSupabaseServerClient();
-  const [have, want, tried] = await Promise.all([
+  const [have, counts] = await Promise.all([
     loadCellarProducts(supabase, memberId, "have"),
-    loadCellarProducts(supabase, memberId, "want"),
-    loadCellarProducts(supabase, memberId, "tried"),
+    loadCellarFilterCounts(supabase, memberId),
   ]);
 
   return (
     <CellarTab
       have={have}
-      want={want}
-      tried={tried}
+      counts={counts}
       isOwnProfile={isOwnProfile}
       memberFirstName={memberFirstName}
     />
